@@ -30,5 +30,13 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o packwiz main.go
 
 # Move binary into final image
 FROM alpine as app
-COPY --from=build /workspace/packwiz /
-ENTRYPOINT [ "/packwiz" ]
+
+WORKDIR /workspace
+
+# Make sure bash is available for next steps
+RUN apk add --no-cache bash
+
+COPY --chmod=755 --from=build /workspace/packwiz /usr/local/bin/
+COPY --chmod=755 ./scripts/* /
+
+ENTRYPOINT [ "/entrypoint" ]
