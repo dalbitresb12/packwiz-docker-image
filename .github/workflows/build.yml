@@ -9,23 +9,50 @@ env:
   TARGET_REPOSITORY: 'packwiz/packwiz'
 
 jobs:
-  build:
+  check:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      actions: read
-      packages: write
+      packages: read
+    outputs:
+      ref: ${{ steps.repo.outputs.ref }}
+      build: ${{ steps.inspect.outputs.enable }}
     steps:
-      - name: Get latest commit ref info
-        id: ref_info
+      - name: Get latest ${{ env.TARGET_REPOSITORY }} commit info
+        id: repo
         run: |
           TARGET_REPOSITORY="${{ env.TARGET_REPOSITORY }}"
           DEFAULT_BRANCH="$(curl -s -H "Accept: application/vnd.github+json" https://api.github.com/repos/$TARGET_REPOSITORY | jq -r .default_branch)"
-          BRANCH_INFO="$(curl -s -H "Accept: application/vnd.github+json" "https://api.github.com/repos/$TARGET_REPOSITORY/commits/$DEFAULT_BRANCH")"
-          HEAD_REF="$(echo $BRANCH_INFO | jq -r .sha)"
-          REF_DATE="$(echo $BRANCH_INFO | jq -r .commit.author.date)"
-          echo "HEAD_REF=$HEAD_REF" >> "$GITHUB_OUTPUT"
-          echo "REF_DATE=$REF_DATE" >> "$GITHUB_OUTPUT"
+          HEAD_REF="$(curl -s -H "Accept: application/vnd.github.sha" "https://api.github.com/repos/$TARGET_REPOSITORY/commits/$DEFAULT_BRANCH")"
+          echo "ref=$HEAD_REF" >> "$GITHUB_OUTPUT"
+      - name: Get image name
+        id: image
+        run: echo "name=ghcr.io/dalbitresb12/packwiz:packwiz-sha-${{ steps.repo.outputs.ref }}" >> "$GITHUB_OUTPUT"
+      - name: Inspect image and detect if this build is already pushed
+        id: inspect
+        run: |
+          if ! docker pull ${{ steps.image.outputs.name }}; then
+            # Image doesn't exist for specified packwiz commit, so build should happen
+            echo "enable=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          IMAGE_INFO="$(docker inspect ${{ steps.image.outputs.name }})"
+          REVISION="$(echo $IMAGE_INFO | jq -r .[0].Config.Labels.\"org.opencontainers.image.revision\")"
+          if [[ "$REVISION" != "${{ github.sha }}" ]]; then
+            # Image exists, but the image build repository contents have changed, so build should happen
+            echo "enable=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # In any other case, builds shouldn't happen
+          echo "enable=false" >> "$GITHUB_OUTPUT"
+  build:
+    runs-on: ubuntu-latest
+    needs: [check]
+    if: fromJson(needs.check.outputs.build)
+    permissions:
+      actions: read
+      packages: write
+    steps:
       - name: Create image metadata
         id: meta
         uses: docker/metadata-action@v4
@@ -36,7 +63,7 @@ jobs:
           tags: |
             type=schedule,pattern=nightly
             type=schedule,pattern={{date 'YYYY-MM-DD'}}
-            type=raw,value=${{ steps.ref_info.outputs.HEAD_REF }},prefix=packwiz-sha-
+            type=raw,value=${{ needs.check.outputs.ref }},prefix=packwiz-sha-
           flavor: |
             latest=true
           labels: |
@@ -46,7 +73,6 @@ jobs:
             org.opencontainers.image.documentation=https://github.com/dalbitresb12/packwiz-docker-image#readme
             org.opencontainers.image.url=https://github.com/dalbitresb12/packwiz-docker-image#readme
             org.opencontainers.image.source=https://github.com/dalbitresb12/packwiz-docker-image
-            org.opencontainers.image.created=${{ steps.ref_info.outputs.REF_DATE }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       - name: Login to Docker Hub
@@ -67,6 +93,6 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
-            HEAD_REF=${{ steps.ref_info.outputs.HEAD_REF }}
+            HEAD_REF=${{ needs.check.outputs.ref }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
