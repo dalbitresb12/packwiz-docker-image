@@ -1,0 +1,68 @@
+name: build
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * *'
+
+env:
+  TARGET_REPOSITORY: 'packwiz/packwiz'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      packages: write
+    steps:
+      - name: Get latest commit ref
+        id: ref
+        run: |
+          TARGET_REPOSITORY="${{ env.TARGET_REPOSITORY }}"
+          DEFAULT_BRANCH="$(curl -s -H "Accept: application/vnd.github+json" https://api.github.com/repos/$TARGET_REPOSITORY | jq -r .default_branch)"
+          HEAD_REF="$(curl -s -H "Accept: application/vnd.github.sha" "https://api.github.com/repos/$TARGET_REPOSITORY/commits/$DEFAULT_BRANCH")"
+          echo "HEAD_REF=$HEAD_REF" >> "$GITHUB_OUTPUT"
+      - name: Create image metadata
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: |
+            dalbitresb12/packwiz
+            ghcr.io/dalbitresb12/packwiz
+          tags: |
+            type=schedule,pattern=nightly
+            type=schedule,pattern={{date 'YYYY-MM-DD'}}
+            type=raw,value=${{ steps.ref.outputs.HEAD_REF }},prefix=packwiz-sha-
+          flavor: |
+            latest=true
+          labels: |
+            org.opencontainers.image.title=packwiz-docker-image
+            org.opencontainers.image.authors=dalbitresb12
+            org.opencontainers.image.description=See more at <https://github.com/dalbitresb12/packwiz-docker-image#readme>.
+            org.opencontainers.image.documentation=https://github.com/dalbitresb12/packwiz-docker-image#readme
+            org.opencontainers.image.url=https://github.com/dalbitresb12/packwiz-docker-image#readme
+            org.opencontainers.image.source=https://github.com/dalbitresb12/packwiz-docker-image
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push
+        uses: docker/build-push-action@v4
+        with:
+          push: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            HEAD_REF=${{ steps.ref.outputs.HEAD_REF }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
