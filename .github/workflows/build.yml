@@ -22,8 +22,8 @@ jobs:
         id: repo
         run: |
           TARGET_REPOSITORY="${{ env.TARGET_REPOSITORY }}"
-          DEFAULT_BRANCH="$(curl -s -H "Accept: application/vnd.github+json" https://api.github.com/repos/$TARGET_REPOSITORY | jq -r .default_branch)"
-          HEAD_REF="$(curl -s -H "Accept: application/vnd.github.sha" "https://api.github.com/repos/$TARGET_REPOSITORY/commits/$DEFAULT_BRANCH")"
+          DEFAULT_BRANCH="$(curl -s -H "Accept: application/vnd.github+json" -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" https://api.github.com/repos/$TARGET_REPOSITORY | jq -r .default_branch)"
+          HEAD_REF="$(curl -s -H "Accept: application/vnd.github.sha" -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/$TARGET_REPOSITORY/commits/$DEFAULT_BRANCH")"
           echo "Found hash for $TARGET_REPOSITORY on $DEFAULT_BRANCH: $HEAD_REF"
           echo "ref=$HEAD_REF" >> "$GITHUB_OUTPUT"
       - name: Get image name
@@ -52,6 +52,7 @@ jobs:
     needs: [check]
     if: fromJson(needs.check.outputs.build)
     permissions:
+      contents: read
       actions: read
       packages: write
     steps:
