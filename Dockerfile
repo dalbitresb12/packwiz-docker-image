@@ -37,6 +37,6 @@ WORKDIR /workspace
 RUN apk add --no-cache bash
 
 COPY --chmod=755 --from=build /workspace/packwiz /usr/local/bin/
-COPY --chmod=755 ./scripts/* /
+COPY --chmod=755 ./scripts/entrypoint.sh /entrypoint
 
 ENTRYPOINT [ "/entrypoint" ]
