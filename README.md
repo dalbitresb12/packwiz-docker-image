@@ -9,13 +9,61 @@ This repository contains the configuration for the (unofficial) Docker image for
 
 ## Examples
 
-### Adding a mod
+### Initializing a modpack
+
+> If you need to respond to any prompts interactively, use `-it` in your `docker run` command.
 
 ```bash
-$ docker run --rm -v "$(pwd)":/workspace dalbitresb12/packwiz modrinth add iris
+$ docker run -it --rm -v "$(pwd)":/workspace dalbitresb12/packwiz init
+Modpack name [Workspace]: My Awesome Modpack
+Author: dalbitresb12
+Version [1.0.0]:
+Minecraft version [1.21.1]:
+Mod loader [quilt]: fabric
+Fabric loader version [0.16.2]:
+Refreshing index... 0 % [------------------------------------------------------------------------------] done
+pack.toml created!
+$ ls -lh
+total 8.0K
+-rw-r--r-- 1 root root  34 Aug 22 20:37 index.toml
+-rw-r--r-- 1 root root 250 Aug 22 20:37 pack.toml
+```
+
+#### Running as a different user
+
+The image by default uses `root` as the user inside the container. You can change that using the `--user` flag from the Docker CLI.
+
+> You can use `id -u` and `id -g` to get your current user and group ID.
+
+```bash
+$ docker run -it --user "$(id -u):$(id -g)" --rm -v "$(pwd)":/workspace dalbitresb12/packwiz init
+Modpack name [Workspace]: My Awesome Modpack
+Author: dalbitresb12
+Version [1.0.0]:
+Minecraft version [1.21.1]:
+Mod loader [quilt]: fabric
+Fabric loader version [0.16.2]:
+index.toml created!
+Refreshing index... 0 % [------------------------------------------------------------------------------] done
+pack.toml created!
+$ ls -lh
+total 8.0K
+-rw-r--r-- 1 dab12 dab12  34 Aug 22 20:42 index.toml
+-rw-r--r-- 1 dab12 dab12 277 Aug 22 20:42 pack.toml
+```
+
+### Adding a mod
+
+> You can auto-accept most prompts in packwiz in non-interactive mode using the `-y` flag.
+
+```bash
+$ docker run --user "$(id -u):$(id -g)" --rm -v "$(pwd)":/workspace dalbitresb12/packwiz modrinth add iris -y
 Finding dependencies...
-All dependencies are already added!
-Project "Iris Shaders" successfully added! (iris-mc1.20-1.6.4.jar)
+Dependencies found:
+Sodium
+Would you like to add them? [Y/n]: Y (non-interactive mode)
+Dependency "Sodium" successfully added! (sodium-fabric-0.6.0-beta.1+mc1.21.jar)
+Project "Iris Shaders" successfully added! (iris-fabric-1.8.0-beta.1+mc1.21.1.jar)
 ```
 
 ### Listing all mods
@@ -23,6 +71,7 @@ Project "Iris Shaders" successfully added! (iris-mc1.20-1.6.4.jar)
 ```bash
 $ docker run --rm -v "$(pwd)":/workspace dalbitresb12/packwiz list
 Iris Shaders
+Sodium
 ```
 
 ### Building modpack for distribution when using no-internal-hashes mode without touching original files
