@@ -119,7 +119,7 @@ jobs:
           echo "enable=false" >> "$GITHUB_OUTPUT"
       - name: Set dry run variable
         id: dry_run
-        if: fromJson(steps.inspect.outputs.enable) || fromJson(steps.inspect.outputs.retag)
+        if: fromJson(steps.inspect.outputs.enable || steps.inspect.outputs.retag)
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             echo "value=${{ inputs.dry_run }}" >> "$GITHUB_OUTPUT"
