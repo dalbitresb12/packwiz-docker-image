@@ -40,9 +40,6 @@ jobs:
           HEAD_REF="$(curl -s -H "Accept: application/vnd.github.sha" -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/$TARGET_REPOSITORY/commits/$DEFAULT_BRANCH")"
           echo "Found hash for $TARGET_REPOSITORY on $DEFAULT_BRANCH: $HEAD_REF"
           echo "ref=$HEAD_REF" >> "$GITHUB_OUTPUT"
-      - name: Get image name
-        id: image
-        run: echo "name=ghcr.io/${{ env.IMAGE_NAMESPACE }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_UPSTREAM_SHA_PREFIX }}${{ steps.repo.outputs.ref }}" >> "$GITHUB_OUTPUT"
       - name: Clone state branch
         uses: actions/checkout@v4
         with:
@@ -80,13 +77,14 @@ jobs:
           fi
 
           # The rest shouldn't execute, but I'm leaving it here as a backup
-          if ! docker pull ${{ steps.image.outputs.name }}; then
+          IMAGE_NAME="ghcr.io/${{ env.IMAGE_NAMESPACE }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_UPSTREAM_SHA_PREFIX }}${{ steps.repo.outputs.ref }}"
+          if ! docker pull "$IMAGE_NAME"; then
             echo "Unable to find image for this ref, enabling build..."
             echo "enable=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          IMAGE_INFO="$(docker inspect ${{ steps.image.outputs.name }})"
+          IMAGE_INFO="$(docker inspect "$IMAGE_NAME")"
           REVISION="$(echo $IMAGE_INFO | jq -r .[0].Config.Labels.\"org.opencontainers.image.revision\")"
           echo "Image revision: $REVISION"
           if [[ "$REVISION" != "${{ github.sha }}" ]]; then
