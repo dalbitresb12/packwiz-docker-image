@@ -11,6 +11,13 @@ on:
         type: boolean
         default: false
         description: Test the workflow without making changes
+      retag:
+        type: boolean
+        default: false
+        description: Start retag job for specified upstream commit
+      retag-sha:
+        type: string
+        description: Commit SHA for retag job
   schedule:
     - cron: '0 0 * * *'
 
@@ -30,6 +37,8 @@ jobs:
     outputs:
       ref: ${{ steps.repo.outputs.ref }}
       build: ${{ steps.inspect.outputs.enable }}
+      retag: ${{ steps.inspect.outputs.retag == 'true' }}
+      retag-sha: ${{ steps.inspect.outputs.retag-sha }}
       dry_run: ${{ steps.dry_run.outputs.value }}
     steps:
       - name: Get latest ${{ env.TARGET_REPOSITORY }} commit info
@@ -47,6 +56,12 @@ jobs:
             echo "Force push was requested, enabling build..."
             echo "enable=true" >> "$GITHUB_OUTPUT"
             exit 0
+          fi
+
+          if [[ "${{ inputs.retag }}" == "true" ]]; then
+            echo "Forced retag was requested, starting retag job..."
+            echo "retag=true" >> "$GITHUB_OUTPUT"
+            echo "retag-sha=${{ inputs.retag-sha }}" >> "$GITHUB_OUTPUT"
           fi
 
           if [ ! -f "${{ env.STATE_FILE }}" ]; then
@@ -72,7 +87,17 @@ jobs:
             exit 0
           fi
 
-          # The rest shouldn't execute, but I'm leaving it here as a backup
+          EXISTS_BUT_NOT_LATEST="$(echo $VERSION_LIST | jq 'any(.[].metadata.container.tags[]; . == "${{ env.IMAGE_UPSTREAM_SHA_PREFIX }}${{ steps.repo.outputs.ref }}")')"
+          if [[ "$EXISTS_BUT_NOT_LATEST" == "true" ]]; then
+            RETAG_SHA="$(echo $VERSION_LIST | jq -r '.[] | select(.metadata.container.tags | index("${{ env.IMAGE_UPSTREAM_SHA_PREFIX }}${{ steps.repo.outputs.ref }}") != null) | .name')"
+            echo "Ref ${{ steps.repo.outputs.ref }} already exists but is not latest, starting retag job..."
+            echo "retag=true" >> "$GITHUB_OUTPUT"
+            echo "retag-sha=$RETAG_SHA" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # The rest shouldn't execute most times, but it should serve as a backup if the image is really old and isn't returned in the API response.
+          # I highly doubt that would happen, but I already coded this so it doesn't hurt leaving it here.
           IMAGE_NAME="ghcr.io/${{ env.IMAGE_NAMESPACE }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_UPSTREAM_SHA_PREFIX }}${{ steps.repo.outputs.ref }}"
           if ! docker pull "$IMAGE_NAME"; then
             echo "Unable to find image for this ref, enabling build..."
@@ -93,7 +118,7 @@ jobs:
           echo "enable=false" >> "$GITHUB_OUTPUT"
       - name: Set dry run variable
         id: dry_run
-        if: fromJson(steps.inspect.outputs.enable)
+        if: fromJson(steps.inspect.outputs.enable) || fromJson(steps.inspect.outputs.retag)
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             echo "value=${{ inputs.dry_run }}" >> "$GITHUB_OUTPUT"
@@ -156,6 +181,67 @@ jobs:
             HEAD_REF=${{ needs.check.outputs.ref }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+      - name: Clone state branch
+        uses: actions/checkout@v4
+        with:
+          ref: state
+      - name: Update state
+        run: echo "${{ needs.check.outputs.ref }}" > "${{ env.STATE_FILE }}"
+      - name: Push state
+        if: ${{ !fromJson(needs.check.outputs.dry_run) }}
+        uses: EndBug/add-and-commit@v9
+        with:
+          default_author: github_actions
+          message: Updated state
+  retag:
+    runs-on: ubuntu-latest
+    needs: [check]
+    if: fromJson(needs.check.outputs.retag)
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - name: Create image metadata
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: |
+            ${{ env.IMAGE_NAMESPACE }}/${{ env.IMAGE_NAME }}
+            ghcr.io/${{ env.IMAGE_NAMESPACE }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=nightly
+            type=raw,value={{date 'YYYY-MM-DD'}}
+            type=raw,value=${{ needs.check.outputs.ref }},prefix=${{ env.IMAGE_UPSTREAM_SHA_PREFIX }}
+          flavor: |
+            latest=true
+          sep-tags: ','
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Retag with buildx
+        env:
+          IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
+          SOURCE_IMAGE_NAME: 'ghcr.io/${{ env.IMAGE_NAMESPACE }}/${{ env.IMAGE_NAME }}@${{ needs.check.outputs.retag-sha }}'
+        run: |
+          IFS=',' read -r -a tags_array <<< "$IMAGE_TAGS"
+
+          for tag in "${tags_array[@]}"; do
+            if [[ "${{ needs.check.outputs.dry_run }}" == "true" ]]; then
+              echo "Dry run: would've retagged $SOURCE_IMAGE_NAME to $tag"
+            else
+              docker buildx imagetools create "$SOURCE_IMAGE_NAME" -t "$tag"
+            fi
+          done
       - name: Clone state branch
         uses: actions/checkout@v4
         with:
