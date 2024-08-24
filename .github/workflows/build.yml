@@ -20,7 +20,7 @@ jobs:
   check:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
       packages: read
     outputs:
       ref: ${{ steps.repo.outputs.ref }}
@@ -96,9 +96,9 @@ jobs:
     needs: [check]
     if: fromJson(needs.check.outputs.build)
     permissions:
-      contents: read
-      actions: read
+      contents: write
       packages: write
+      actions: read
     steps:
       - name: Create image metadata
         id: meta
