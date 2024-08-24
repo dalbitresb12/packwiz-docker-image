@@ -36,10 +36,10 @@ jobs:
       packages: read
     outputs:
       ref: ${{ steps.repo.outputs.ref }}
-      build: ${{ steps.inspect.outputs.enable == 'true' }}
-      retag: ${{ steps.inspect.outputs.retag == 'true' }}
+      build: ${{ steps.inspect.outputs.enable == 'true' && 'true' || 'false' }}
+      retag: ${{ steps.inspect.outputs.retag == 'true' && 'true' || 'false' }}
       retag-sha: ${{ steps.inspect.outputs.retag-sha }}
-      dry_run: ${{ steps.dry_run.outputs.value == 'true' }}
+      dry_run: ${{ steps.dry_run.outputs.value == 'true' && 'true' || 'false' }}
     steps:
       - name: Get latest ${{ env.TARGET_REPOSITORY }} commit info
         id: repo
