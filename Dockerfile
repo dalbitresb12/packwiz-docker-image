@@ -1,4 +1,4 @@
-FROM alpine as cloner
+FROM alpine AS cloner
 
 # Use the main branch by default
 ARG HEAD_REF=main
@@ -11,7 +11,7 @@ RUN git clone https://github.com/packwiz/packwiz.git .
 RUN git reset --hard ${HEAD_REF}
 
 # Build the binary
-FROM golang:1.19 as build
+FROM golang:1.19 AS build
 
 WORKDIR /workspace
 
@@ -29,7 +29,7 @@ COPY --from=cloner /repository/ ./
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o packwiz main.go
 
 # Move binary into final image
-FROM alpine as app
+FROM alpine AS app
 
 WORKDIR /workspace
 
