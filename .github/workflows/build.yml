@@ -17,7 +17,7 @@ on:
         description: Start retag job for specified upstream commit
       retag-sha:
         type: string
-        description: Commit SHA for retag job
+        description: Multi-platform manifest to use for retagging, in the format of sha256:<hash>
   schedule:
     - cron: '0 0 * * *'
 
@@ -201,6 +201,13 @@ jobs:
       contents: write
       packages: write
     steps:
+      - name: Fail if retag doesn't start with sha256
+        if: ${{ !startsWith(needs.check.outputs.retag-sha, 'sha256:') }}
+        env:
+          MANIFEST_SHA: ${{ needs.check.outputs.retag-sha }}
+        run: |
+          echo "Invalid manifest SHA: $MANIFEST_SHA"
+          exit 1
       - name: Create image metadata
         id: meta
         uses: docker/metadata-action@v4
