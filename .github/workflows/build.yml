@@ -40,10 +40,6 @@ jobs:
           HEAD_REF="$(curl -s -H "Accept: application/vnd.github.sha" -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/$TARGET_REPOSITORY/commits/$DEFAULT_BRANCH")"
           echo "Found hash for $TARGET_REPOSITORY on $DEFAULT_BRANCH: $HEAD_REF"
           echo "ref=$HEAD_REF" >> "$GITHUB_OUTPUT"
-      - name: Clone state branch
-        uses: actions/checkout@v4
-        with:
-          ref: state
       - name: Inspect image and detect if this build is already pushed
         id: inspect
         run: |
