@@ -18,6 +18,7 @@ env:
   TARGET_REPOSITORY: 'packwiz/packwiz'
   IMAGE_NAMESPACE: 'dalbitresb12'
   IMAGE_NAME: 'packwiz'
+  IMAGE_UPSTREAM_SHA_PREFIX: 'packwiz-sha-'
   STATE_FILE: 'last-commit.txt'
 
 jobs:
@@ -41,7 +42,7 @@ jobs:
           echo "ref=$HEAD_REF" >> "$GITHUB_OUTPUT"
       - name: Get image name
         id: image
-        run: echo "name=ghcr.io/${{ env.IMAGE_NAMESPACE }}/${{ env.IMAGE_NAME }}:packwiz-sha-${{ steps.repo.outputs.ref }}" >> "$GITHUB_OUTPUT"
+        run: echo "name=ghcr.io/${{ env.IMAGE_NAMESPACE }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_UPSTREAM_SHA_PREFIX }}${{ steps.repo.outputs.ref }}" >> "$GITHUB_OUTPUT"
       - name: Clone state branch
         uses: actions/checkout@v4
         with:
@@ -71,9 +72,9 @@ jobs:
           fi
 
           VERSION_LIST="$(curl -s -H "Accept: application/vnd.github+json" -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/users/${{ env.IMAGE_NAMESPACE }}/packages/container/${{ env.IMAGE_NAME }}/versions?state=active")"
-          HAS_CURRENT_REF="$(echo $VERSION_LIST | jq 'any(.[].metadata.container.tags; (index("latest") != null) and (index("packwiz-sha-${{ steps.repo.outputs.ref }}") != null))')"
+          HAS_CURRENT_REF="$(echo $VERSION_LIST | jq 'any(.[].metadata.container.tags; (index("latest") != null) and (index("${{ env.IMAGE_UPSTREAM_SHA_PREFIX }}${{ steps.repo.outputs.ref }}") != null))')"
           if [[ "$HAS_CURRENT_REF" == "true" ]]; then
-            echo "Ref ${{ steps.repo.outputs.ref }} already exists, skipping build..."
+            echo "Ref ${{ steps.repo.outputs.ref }} already exists and is set to latest, skipping build..."
             echo "enable=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -115,6 +116,9 @@ jobs:
       packages: write
       actions: read
     steps:
+      - name: Get repository name
+        id: repo
+        run: echo "name=$(echo "${{ github.repository }}" | cut -d'/' -f2)" >> "$GITHUB_OUTPUT"
       - name: Create image metadata
         id: meta
         uses: docker/metadata-action@v4
@@ -125,16 +129,16 @@ jobs:
           tags: |
             type=schedule,pattern=nightly
             type=schedule,pattern={{date 'YYYY-MM-DD'}}
-            type=raw,value=${{ needs.check.outputs.ref }},prefix=packwiz-sha-
+            type=raw,value=${{ needs.check.outputs.ref }},prefix=${{ env.IMAGE_UPSTREAM_SHA_PREFIX }}
           flavor: |
             latest=true
           labels: |
-            org.opencontainers.image.title=packwiz-docker-image
-            org.opencontainers.image.authors=dalbitresb12
-            org.opencontainers.image.description=See more at https://github.com/dalbitresb12/packwiz-docker-image#readme.
-            org.opencontainers.image.documentation=https://github.com/dalbitresb12/packwiz-docker-image#readme
-            org.opencontainers.image.url=https://github.com/dalbitresb12/packwiz-docker-image#readme
-            org.opencontainers.image.source=https://github.com/dalbitresb12/packwiz-docker-image
+            org.opencontainers.image.title=${{ steps.repo.outputs.name }}
+            org.opencontainers.image.authors=${{ github.repository_owner }}
+            org.opencontainers.image.description=See more at https://github.com/${{ github.repository }}#readme.
+            org.opencontainers.image.documentation=https://github.com/${{ github.repository }}#readme
+            org.opencontainers.image.url=https://github.com/${{ github.repository }}#readme
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       - name: Login to Docker Hub
