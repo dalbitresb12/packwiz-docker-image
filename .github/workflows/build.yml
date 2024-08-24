@@ -36,8 +36,8 @@ jobs:
         id: repo
         run: |
           TARGET_REPOSITORY="${{ env.TARGET_REPOSITORY }}"
-          DEFAULT_BRANCH="$(curl -s -H "Accept: application/vnd.github+json" -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/$TARGET_REPOSITORY" | jq -r .default_branch)"
-          HEAD_REF="$(curl -s -H "Accept: application/vnd.github.sha" -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/$TARGET_REPOSITORY/commits/$DEFAULT_BRANCH")"
+          DEFAULT_BRANCH="$(curl -s -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/$TARGET_REPOSITORY" | jq -r .default_branch)"
+          HEAD_REF="$(curl -s -H "Accept: application/vnd.github.sha" -H "X-GitHub-Api-Version: 2022-11-28" -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/$TARGET_REPOSITORY/commits/$DEFAULT_BRANCH")"
           echo "Found hash for $TARGET_REPOSITORY on $DEFAULT_BRANCH: $HEAD_REF"
           echo "ref=$HEAD_REF" >> "$GITHUB_OUTPUT"
       - name: Detect if the latest upstream commit has already been built
@@ -64,7 +64,7 @@ jobs:
             exit 0
           fi
 
-          VERSION_LIST="$(curl -s -H "Accept: application/vnd.github+json" -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/users/${{ env.IMAGE_NAMESPACE }}/packages/container/${{ env.IMAGE_NAME }}/versions?state=active")"
+          VERSION_LIST="$(curl -s -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/users/${{ env.IMAGE_NAMESPACE }}/packages/container/${{ env.IMAGE_NAME }}/versions")"
           HAS_CURRENT_REF="$(echo $VERSION_LIST | jq 'any(.[].metadata.container.tags; (index("latest") != null) and (index("${{ env.IMAGE_UPSTREAM_SHA_PREFIX }}${{ steps.repo.outputs.ref }}") != null))')"
           if [[ "$HAS_CURRENT_REF" == "true" ]]; then
             echo "Ref ${{ steps.repo.outputs.ref }} already exists and is set to latest, skipping build..."
