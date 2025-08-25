@@ -86,6 +86,7 @@ Index refreshed!
 
 ## Image Build Arguments
 
+- `GO_VERSION`: a valid tag for the [Golang Docker image](https://hub.docker.com/_/golang) which is used for the builder image.
 - `HEAD_REF`: a valid Git ref (commit, branch or tag) to be used in the command `git reset --hard ${HEAD_REF}`.
 
 ## Why the entrypoint script?
