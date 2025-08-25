@@ -1,3 +1,5 @@
+ARG GO_VERSION=latest
+
 FROM alpine AS cloner
 
 # Use the main branch by default
@@ -11,7 +13,7 @@ RUN git clone https://github.com/packwiz/packwiz.git .
 RUN git reset --hard ${HEAD_REF}
 
 # Build the binary
-FROM golang:1.19 AS build
+FROM golang:${GO_VERSION} AS build
 
 WORKDIR /workspace
 
